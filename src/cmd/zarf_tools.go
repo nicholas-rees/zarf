@@ -589,6 +589,7 @@ func (o *genPKIOptions) run(cmd *cobra.Command, args []string) error {
 
 type genKeyOptions struct {
 	interactive   bool
+	force         bool
 	password      string
 	passwordStdin bool
 }
@@ -603,7 +604,8 @@ func newGenKeyCommand() *cobra.Command {
 		RunE:    o.run,
 	}
 
-	cmd.Flags().BoolVar(&o.interactive, "interactive", true, lang.CmdToolsGenKeyShortFlagInteractive)
+	cmd.Flags().BoolVar(&o.interactive, "interactive", false, lang.CmdToolsGenKeyShortFlagInteractive)
+	cmd.Flags().BoolVar(&o.force, "force", false, lang.CmdToolsGenKeyShortFlagForce)
 	cmd.Flags().StringVar(&o.password, "password", "", lang.CmdToolsGenKeyShortFlagPassword)
 	cmd.Flags().BoolVar(&o.passwordStdin, "password-stdin", false, lang.CmdToolsGenKeyShortFlagPasswordStdin)
 
@@ -666,7 +668,12 @@ func (o *genKeyOptions) run(cmd *cobra.Command, _ []string) error {
 	// Check if we are about to overwrite existing key files
 	_, prvKeyExistsErr := os.Stat(prvKeyFileName)
 	_, pubKeyExistsErr := os.Stat(pubKeyFileName)
-	if (prvKeyExistsErr == nil || pubKeyExistsErr == nil) && o.interactive {
+	var keyfilesExist bool
+	if prvKeyExistsErr == nil || pubKeyExistsErr == nil {
+		keyfilesExist = true
+	}
+
+	if keyfilesExist && o.interactive {
 		var confirm bool
 		confirmOverwritePrompt := &survey.Confirm{
 			Message: fmt.Sprintf(lang.CmdToolsGenKeyPromptExists, prvKeyFileName),
@@ -678,6 +685,8 @@ func (o *genKeyOptions) run(cmd *cobra.Command, _ []string) error {
 		if !confirm {
 			return errors.New("did not receive confirmation for overwriting key file(s)")
 		}
+	} else if keyfilesExist && !o.force {
+		return errors.New("cosign key file(s) already exist: pass --force to overwrite")
 	}
 
 	// Write the key file contents to disk
